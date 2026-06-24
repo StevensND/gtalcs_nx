@@ -11,6 +11,7 @@
 #include <string.h>
 #include <switch.h>
 
+#include "config.h"
 #include "util.h"
 #include "jni_fake.h"
 #include "movie_player.h"

@@ -23,7 +23,8 @@ To install:
 5. Copy `gtalcs_nx.nro` into `/switch/gtalcs/`.
 
 Your SD card should contain: `/switch/gtalcs/gtalcs_nx.nro`, `/switch/gtalcs/libGame.so`,
-`/switch/gtalcs/libopenal.so`, and `/switch/gtalcs/assets/data_main.wad`.
+`/switch/gtalcs/libopenal.so`, `/switch/gtalcs/data_main.wad` `/switch/gtalcs/data_music.wad`
+and `/switch/gtalcs/intro.m4v`
 
 ### Notes
 
@@ -51,8 +52,7 @@ You're going to need devkitA64 and the following packages/libraries:
 ### Credits
 
 * TheOfficialFloW for the method and the original PS Vita work;
-* fgsfds for max_nx, which this and the CTW port are based on;
-* the gtactw_nx port, which this LCS port adapts.
+* fgsfds for max_nx, which this port is based on;
 
 ### Support
 
