@@ -592,10 +592,6 @@ static void *hal_object(const FakeID *id, va_list va) {
       const char *fn = next_str(va);      // filename (e.g. ".GTA3LCSsf1.b")
       (void)next_str(va);                 // foldername (unused in this port)
       (void)next_str(va);                 // tag / Rockstar ID (unused)
-      if (g_hide_saves) {
-        debugPrintf("JNI: andFile.getFile(%s) -> hidden (New Game)\n", fn);
-        return NULL;
-      }
       long len = 0;
       char *data = read_whole_file(fn, &len);
       debugPrintf("JNI: andFile.getFile(%s) -> %s\n", fn, data ? "ok" : "null");
