@@ -28,7 +28,7 @@
 
 // Define to write debug.log and nxlink stdout. Off for release (debugPrintf
 // becomes a no-op).
-// #define DEBUG_LOG 1
+#define DEBUG_LOG 1
 
 // actual screen size
 extern int screen_width;
