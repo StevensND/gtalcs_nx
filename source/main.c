@@ -310,6 +310,10 @@ static void dispatch_callbacks(void) {
       case JNI_CB_RS_START_BEFORE_LOAD:
         debugPrintf("cb: RockstarJNIlib.StartGameBeforeLoad\n");
         implRsStartGameBeforeLoad(fake_env, NULL);
+        // Clear the gate flag now that the load is in progress, so the next
+        // in-game Load from the pause menu doesn't freeze on the same flag.
+        if (menumgr_global && *menumgr_global)
+          ((volatile uint8_t *)*menumgr_global)[0x2b] = 0;
         break;
 
       case JNI_CB_RS_START_GAME:
@@ -659,19 +663,22 @@ int main(void) {
       uint32_t **scpp = (uint32_t **)((char *)game_mod.load_virtbase + 0x7fd8b8);
       uint32_t *scstate = *scpp;
       int st = scstate ? (int)scstate[0] : -1;
-      // In-game (state 9) "Load Game": CMenuManager::Process gates the load at
-      // +0x2b on a "gate-before-load requested" flag that ShowRockstarGateBeforeLoad
-      // sets on the first load and never clears, so later loads freeze. Clear it
-      // while in-game; state 7 (main menu) is left alone so its reshow guard works.
-      if (st == 9 && menumgr_global && *menumgr_global)
-        ((volatile uint8_t *)*menumgr_global)[0x2b] = 0;
       if (st != last_app_state) {
         debugPrintf("BOOT: app state %d -> %d (frame %llu)\n",
             last_app_state, st, (unsigned long long)frame_count);
         last_app_state = st;
-        if (st == 9 && g_hide_saves) {
-          g_hide_saves = 0;   // in-game now: restore saves so save/load works again
-          debugPrintf("New Game: in-game -> saves restored\n");
+        if (st == 9) {
+          // Clear the "gate-before-load requested" flag once on entry to state 9.
+          // ShowRockstarGateBeforeLoad sets it and never clears it; without this
+          // the in-game pause-menu Load freezes on the second use.
+          // Cleared only on transition (not every frame) so the save-overwrite
+          // confirmation flow can still use the flag within the same state.
+          if (menumgr_global && *menumgr_global)
+            ((volatile uint8_t *)*menumgr_global)[0x2b] = 0;
+          if (g_hide_saves) {
+            g_hide_saves = 0;
+            debugPrintf("New Game: in-game -> saves restored\n");
+          }
         }
         if (st == 7 && !frontend_shown) {
           void *mm = menumgr_global ? *menumgr_global : NULL;
