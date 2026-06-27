@@ -163,10 +163,10 @@ typedef struct {
 // Positional face buttons (Switch B = bottom = engine A confirm).
 // Minus is handled via onBackButtonPressed below, not as a button index.
 static const PadMap pad_map[] = {
-  { HidNpadButton_B, GPAD_BUTTON_B },
-  { HidNpadButton_A, GPAD_BUTTON_A },
-  { HidNpadButton_Y, GPAD_BUTTON_Y },
-  { HidNpadButton_X, GPAD_BUTTON_X },
+  { HidNpadButton_B, GPAD_BUTTON_A },
+  { HidNpadButton_A, GPAD_BUTTON_B },
+  { HidNpadButton_Y, GPAD_BUTTON_X },
+  { HidNpadButton_X, GPAD_BUTTON_Y },
   { HidNpadButton_L, GPAD_BUTTON_L1 },
   { HidNpadButton_R, GPAD_BUTTON_R1 },
   { HidNpadButton_ZL, GPAD_BUTTON_L2 },
@@ -223,6 +223,7 @@ static void  (* implOnBackButtonPressed)(void *env, void *thiz);
 static void  (* implRsGameLoaded)(void *env, void *thiz);
 static void  (* implRsStartGame)(void *env, void *thiz);
 static void  (* implRsStartGameBeforeLoad)(void *env, void *thiz);
+static void  (* implRsStartGameBeforeSave)(void *env, void *thiz);
 static void  (* implRsFinishGate)(void *env, void *thiz);
 static void  (* implRsHandleStateChanged)(void *env, void *thiz, int signed_in);
 static int   (* implCommonHandlePlaylistFinishInit)(void *env, void *thiz, int success);
@@ -276,6 +277,7 @@ static void resolve_entry_points(void) {
   ENT(implRsGameLoaded, RJ "GameLoaded");
   ENT(implRsStartGame, RJ "StartGame");
   ENT(implRsStartGameBeforeLoad, RJ "StartGameBeforeLoad");
+  ENT(implRsStartGameBeforeSave, RJ "StartGameBeforeSave");
   ENT(implRsFinishGate, RJ "FinishGate");
   ENT(implRsHandleStateChanged, RJ "HandleStateChanged");
   ENT(implCommonHandlePlaylistFinishInit, "Java_com_rockstargames_gtalcs_CommonAPI_HandlePlaylistFinishInit");
@@ -311,6 +313,11 @@ static void dispatch_callbacks(void) {
       case JNI_CB_RS_START_BEFORE_LOAD:
         debugPrintf("cb: RockstarJNIlib.StartGameBeforeLoad\n");
         implRsStartGameBeforeLoad(fake_env, NULL);
+        break;
+      case JNI_CB_RS_START_BEFORE_SAVE:
+        debugPrintf("cb: RockstarJNIlib.StartGameBeforeSave\n");
+        if (implRsStartGameBeforeSave)
+          implRsStartGameBeforeSave(fake_env, NULL);
         break;
       case JNI_CB_RS_START_GAME:
         debugPrintf("cb: RockstarJNIlib.StartGame\n");

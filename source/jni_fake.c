@@ -396,6 +396,13 @@ static void hal_void(const FakeID *id, va_list va) {
       push_cb(JNI_CB_RS_START_BEFORE_LOAD, 0);
       return;
     }
+    if (!strcmp(name, "ShowGateBeforeSave")) {
+      // Triggered when overwriting an existing save slot. Without this response
+      // the engine waits forever for StartGameBeforeSave and freezes.
+      debugPrintf("JNI: RockstarJNIlib.ShowGateBeforeSave -> StartGameBeforeSave\n");
+      push_cb(JNI_CB_RS_START_BEFORE_SAVE, 0);
+      return;
+    }
     if (!strcmp(name, "CheckGate")) {
       debugPrintf("JNI: RockstarJNIlib.CheckGate -> FinishGate\n");
       push_cb(JNI_CB_RS_FINISH_GATE, 0);
