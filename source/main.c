@@ -199,7 +199,7 @@ static void  (* implMarkInitialized)(void *env, void *thiz);
 static int   (* implIsInitialized)(void *env, void *thiz);
 static int   (* implIsOnMainMenuScreen)(void *env, void *thiz);
 static void *(* implGetGameBuildType)(void *env, void *thiz);
-void  (* implUpdateRockstarID)(void *env, void *thiz, void *id);
+static void  (* implUpdateRockstarID)(void *env, void *thiz, void *id);
 
 // surface / frame
 static void  (* implViewOnSurfaceCreated)(void *env, void *thiz);
@@ -291,7 +291,6 @@ static void resolve_entry_points(void) {
   (void)implIsInitialized;
   (void)implIsOnMainMenuScreen;
   (void)implGetGameBuildType;
-  // implUpdateRockstarID is called from jni_fake.c (UpdateRockstarID callback)
   (void)implInitTouchSense;
 }
 
@@ -311,7 +310,12 @@ static void dispatch_callbacks(void) {
       case JNI_CB_RS_START_BEFORE_LOAD:
         debugPrintf("cb: RockstarJNIlib.StartGameBeforeLoad\n");
         implRsStartGameBeforeLoad(fake_env, NULL);
+        // Clear the gate flag now that the load is in progress, so the next
+        // in-game Load from the pause menu doesn't freeze on the same flag.
+        if (menumgr_global && *menumgr_global)
+          ((volatile uint8_t *)*menumgr_global)[0x2b] = 0;
         break;
+
       case JNI_CB_RS_START_GAME:
         debugPrintf("cb: RockstarJNIlib.StartGame\n");
         // New Game: hide save files (g_hide_saves) for the duration so the engine
@@ -336,6 +340,12 @@ static void dispatch_callbacks(void) {
       case JNI_CB_RS_STATE_CHANGED:
         debugPrintf("cb: RockstarJNIlib.HandleStateChanged(%d)\n", cb.arg0);
         implRsHandleStateChanged(fake_env, NULL, cb.arg0);
+        break;
+      case JNI_CB_UPDATE_ROCKSTAR_ID:
+        // Reply to RockstarJNIlib.UpdateRockstarID() with an empty string ID.
+        // Without this the save/load menu loops forever re-scanning save slots.
+        debugPrintf("cb: GTAJNIlib.updateRockstarID(\"\")\n");
+        implUpdateRockstarID(fake_env, NULL, jni_make_string(""));
         break;
       case JNI_CB_VIDEO_FINISHED:
         debugPrintf("cb: andVideo.VideoFinishedCB\n");
@@ -407,6 +417,7 @@ static void update_touch(void) {
         continue;
       touch_prev[slot].active = 1;
       touch_prev[slot].finger_id = t->finger_id;
+      debugPrintf("INPUT: TouchStart slot=%d x=%.3f y=%.3f\n", slot, x, y);
       implOnTouchStart(fake_env, NULL, slot, x, y);
     } else if (x != touch_prev[slot].x || y != touch_prev[slot].y) {
       implOnTouchMove(fake_env, NULL, slot, x, y);
@@ -418,6 +429,7 @@ static void update_touch(void) {
 
   for (int slot = 0; slot < MAX_TOUCHES; slot++) {
     if (touch_prev[slot].active && !seen[slot]) {
+      debugPrintf("INPUT: TouchEnd slot=%d x=%.3f y=%.3f\n", slot, touch_prev[slot].x, touch_prev[slot].y);
       implOnTouchEnd(fake_env, NULL, slot, touch_prev[slot].x, touch_prev[slot].y);
       touch_prev[slot].active = 0;
     }
@@ -435,9 +447,11 @@ static void update_gamepad(void) {
   for (unsigned int i = 0; i < sizeof(pad_map) / sizeof(*pad_map); i++) {
     if (changed & pad_map[i].hid) {
       if (down & pad_map[i].hid) {
+        debugPrintf("INPUT: JoyButtonDown pad=0 btn=%d\n", pad_map[i].button);
         implOnJoyButtonDown(fake_env, NULL, 0, pad_map[i].button);
         movie_skip(); // the game ignores input while waiting for a movie
       } else {
+        debugPrintf("INPUT: JoyButtonUp pad=0 btn=%d\n", pad_map[i].button);
         implOnJoyButtonUp(fake_env, NULL, 0, pad_map[i].button);
       }
     }
@@ -467,6 +481,7 @@ static void update_gamepad(void) {
   for (int i = 0; i < 6; i++) {
     if (axes[i] != prev_axes[i]) {
       prev_axes[i] = axes[i];
+      debugPrintf("INPUT: JoyAxis idx=%d val=%.3f\n", axis_idx[i], axes[i]);
       implSetJoyAxis(fake_env, NULL, 0, axis_idx[i], axes[i]);
     }
   }
@@ -653,19 +668,22 @@ int main(void) {
       uint32_t **scpp = (uint32_t **)((char *)game_mod.load_virtbase + 0x7fd8b8);
       uint32_t *scstate = *scpp;
       int st = scstate ? (int)scstate[0] : -1;
-      // In-game (state 9) "Load Game": CMenuManager::Process gates the load at
-      // +0x2b on a "gate-before-load requested" flag that ShowRockstarGateBeforeLoad
-      // sets on the first load and never clears, so later loads freeze. Clear it
-      // while in-game; state 7 (main menu) is left alone so its reshow guard works.
-      if (st == 9 && menumgr_global && *menumgr_global)
-        ((volatile uint8_t *)*menumgr_global)[0x2b] = 0;
       if (st != last_app_state) {
         debugPrintf("BOOT: app state %d -> %d (frame %llu)\n",
             last_app_state, st, (unsigned long long)frame_count);
         last_app_state = st;
-        if (st == 9 && g_hide_saves) {
-          g_hide_saves = 0;   // in-game now: restore saves so save/load works again
-          debugPrintf("New Game: in-game -> saves restored\n");
+        if (st == 9) {
+          // Clear the "gate-before-load requested" flag once on entry to state 9.
+          // ShowRockstarGateBeforeLoad sets it and never clears it; without this
+          // the in-game pause-menu Load freezes on the second use.
+          // Cleared only on transition (not every frame) so the save-overwrite
+          // confirmation flow can still use the flag within the same state.
+          if (menumgr_global && *menumgr_global)
+            ((volatile uint8_t *)*menumgr_global)[0x2b] = 0;
+          if (g_hide_saves) {
+            g_hide_saves = 0;
+            debugPrintf("New Game: in-game -> saves restored\n");
+          }
         }
         if (st == 7 && !frontend_shown) {
           void *mm = menumgr_global ? *menumgr_global : NULL;
@@ -684,6 +702,22 @@ int main(void) {
       debugPrintf("New Game: save-hide timed out -> saves restored\n");
     }
 
+    // Debug: log CMenuManager bytes 0x28-0x30 to track save state flags
+    if (menumgr_global && *menumgr_global) {
+      volatile uint8_t *mm = (volatile uint8_t *)*menumgr_global;
+      static uint8_t prev_mm[16] = {0};
+      int changed = 0;
+      for (int _i = 0; _i < 16; _i++)
+        if (mm[0x28 + _i] != prev_mm[_i]) { changed = 1; break; }
+      if (changed) {
+        debugPrintf("MENU[0x28-0x37]: %02x %02x %02x %02x %02x %02x %02x %02x "
+                    "%02x %02x %02x %02x %02x %02x %02x %02x\n",
+                    mm[0x28],mm[0x29],mm[0x2a],mm[0x2b],mm[0x2c],mm[0x2d],
+                    mm[0x2e],mm[0x2f],mm[0x30],mm[0x31],mm[0x32],mm[0x33],
+                    mm[0x34],mm[0x35],mm[0x36],mm[0x37]);
+        for (int _i = 0; _i < 16; _i++) prev_mm[_i] = mm[0x28 + _i];
+      }
+    }
     update_gamepad();
     update_touch();
 

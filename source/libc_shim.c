@@ -242,7 +242,10 @@ int open_fake(const char *path, int flags, ...) {
     mode = va_arg(va, int);
     va_end(va);
   }
-  return open(path, convert_open_flags(flags), mode);
+  int fd = open(path, convert_open_flags(flags), mode);
+  if (path && strstr(path, "GTA3LCS"))
+    debugPrintf("open(%s, flags=0x%x) -> fd=%d\n", path, flags, fd);
+  return fd;
 }
 
 int openat_fake(int dirfd, const char *path, int flags, ...) {
