@@ -51,7 +51,6 @@ typedef enum {
   JNI_CB_RS_START_GAME,             // RockstarJNIlib.StartGame()
   JNI_CB_RS_GAME_LOADED,            // RockstarJNIlib.GameLoaded()
   JNI_CB_RS_STATE_CHANGED,          // RockstarJNIlib.HandleStateChanged(signedIn)
-  JNI_CB_UPDATE_ROCKSTAR_ID,        // GTAJNIlib.updateRockstarID("") -- reply to UpdateRockstarID
   JNI_CB_VIDEO_FINISHED,            // andVideo.VideoFinishedCB()
   JNI_CB_PLAYLIST_FINISH_INIT,      // CommonAPI.HandlePlaylistFinishInit(success)
 } JniCallbackType;

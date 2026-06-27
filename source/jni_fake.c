@@ -396,13 +396,6 @@ static void hal_void(const FakeID *id, va_list va) {
       push_cb(JNI_CB_RS_START_BEFORE_LOAD, 0);
       return;
     }
-    if (!strcmp(name, "ShowGateBeforeSave")) {
-      // Triggered when overwriting an existing save slot. The engine waits for
-      // FinishGate to proceed (StartGameBeforeSave doesn't exist in this build).
-      debugPrintf("JNI: RockstarJNIlib.ShowGateBeforeSave -> FinishGate\n");
-      push_cb(JNI_CB_RS_FINISH_GATE, 0);
-      return;
-    }
     if (!strcmp(name, "CheckGate")) {
       debugPrintf("JNI: RockstarJNIlib.CheckGate -> FinishGate\n");
       push_cb(JNI_CB_RS_FINISH_GATE, 0);
@@ -418,16 +411,8 @@ static void hal_void(const FakeID *id, va_list va) {
       push_cb(JNI_CB_RS_STATE_CHANGED, 0); // offline / signed-out
       return;
     }
-    if (!strcmp(name, "UpdateRockstarID")) {
-      // Engine calls this to request the current Rockstar ID before showing the
-      // save/load menu. Without the reply callback it loops forever re-scanning
-      // save slots. Reply immediately with an empty ID (offline, no account).
-      debugPrintf("JNI: RockstarJNIlib.UpdateRockstarID -> updateRockstarID(\"\")\n");
-      push_cb(JNI_CB_UPDATE_ROCKSTAR_ID, 0);
-      return;
-    }
-    // ShowPrompt / SetLocalePriority -> no-op
-    debugPrintf("JNI: RockstarJNIlib.%s [sig=%s] ignored\n", name, id->sig);
+    // ShowPrompt / SetLocalePriority / UpdateRockstarID -> no-op
+    debugPrintf("JNI: RockstarJNIlib.%s ignored\n", name);
     return;
   }
 
@@ -465,39 +450,14 @@ static void hal_void(const FakeID *id, va_list va) {
   // --- com.rockstargames.hal.andFile (write a small user file natively) ---
   if (cls_is(id, "andFile")) {
     if (!strcmp(name, "writeUserFile")) {
-      // The engine calls writeUserFile(String filename, byte[] data) where the
-      // second argument is a FakePriArray holding binary savegame bytes.
-      // The previous code used next_str() on the second arg, which extracts the
-      // ->utf pointer from a FakeString -- but save data is a byte[], not a
-      // String. strlen() on a FakePriArray pointer is undefined behaviour and
-      // truncates (or corrupts) the write at the first 0x00 byte.
-      // On overwrite (slot already exists) the engine re-reads the file right
-      // after writing; reading a truncated/garbage save caused the freeze/crash.
-      const char *fn = next_str(va);          // arg0: filename (String -- ok)
-      FakePriArray *arr = va_arg(va, void *); // arg1: byte[] (FakePriArray)
-      const char *data = NULL;
-      int data_len = 0;
-      if (arr && arr->tag == TAG_PRIARR) {
-        data     = (const char *)arr->data;
-        data_len = arr->len;
-      } else if (arr) {
-        // Defensive fallback: some callers may pass a String-wrapped buffer
-        FakeString *s = (FakeString *)arr;
-        if (s->tag == TAG_STRING && s->utf) {
-          data     = s->utf;
-          data_len = (int)strlen(s->utf);
-        }
-      }
-      FILE *f = NULL;
-      if (data && data_len > 0) {
-        f = fopen(fn, "wb");
-        if (f) { fwrite(data, 1, (size_t)data_len, f); fclose(f); }
-      }
-      debugPrintf("JNI: andFile.writeUserFile(%s, %d bytes) -> %s\n",
-                  fn, data_len, (f || data_len == 0) ? "ok" : "FAIL");
+      const char *fn = next_str(va);
+      const char *data = next_str(va);
+      FILE *f = fopen(fn, "wb");
+      if (f) { fwrite(data, 1, strlen(data), f); fclose(f); }
+      debugPrintf("JNI: andFile.writeUserFile(%s) -> %s\n", fn, f ? "ok" : "FAIL");
       return;
     }
-    debugPrintf("JNI: andFile.%s [sig=%s] (void) ignored\n", name, id->sig);
+    debugPrintf("JNI: andFile.%s (void) ignored\n", name);
     return;
   }
 
@@ -538,7 +498,7 @@ static void hal_void(const FakeID *id, va_list va) {
 
   // --- com.rockstargames.hal.andAudio (UI sfx) -- stub for now ---
   // --- everything else (andView/andViewManager/andLabel/andButton/...) ---
-  debugPrintf("JNI: CallVoidMethod %s.%s [sig=%s] ignored\n", id->cls, name, id->sig);
+  debugPrintf("JNI: CallVoidMethod %s.%s ignored\n", id->cls, name);
 }
 
 static juint hal_int(const FakeID *id, va_list va) {
@@ -555,7 +515,7 @@ static juint hal_int(const FakeID *id, va_list va) {
     if (!strcmp(name, "PlayAudioFile"))
       return 0; // handle 0 == "not playing"
   }
-  debugPrintf("JNI: CallIntMethod %s.%s [sig=%s] -> 0\n", id->cls, name, id->sig);
+  debugPrintf("JNI: CallIntMethod %s.%s -> 0\n", id->cls, name);
   return 0;
 }
 
@@ -585,7 +545,7 @@ static juint hal_bool(const FakeID *id, va_list va) {
     if (!strcmp(name, "CheckGate"))
       return 1;
   }
-  debugPrintf("JNI: CallBooleanMethod %s.%s [sig=%s] -> false\n", id->cls, name, id->sig);
+  debugPrintf("JNI: CallBooleanMethod %s.%s -> false\n", id->cls, name);
   return 0;
 }
 
@@ -595,7 +555,7 @@ static float hal_float(const FakeID *id, va_list va) {
     const char *v = kv_get(key);
     return v ? (float)atof(v) : 0.0f;
   }
-  debugPrintf("JNI: CallFloatMethod %s.%s [sig=%s] -> 0\n", id->cls, id->name, id->sig);
+  debugPrintf("JNI: CallFloatMethod %s.%s -> 0\n", id->cls, id->name);
   return 0.0f;
 }
 
@@ -627,12 +587,18 @@ static void *hal_object(const FakeID *id, va_list va) {
       return r;
     }
     if (!strcmp(name, "getFile")) {
-      // (dir, name, ext)[B -- best effort: read `name` from the game dir as a
-      // byte[]; NULL on miss (first boot has no saves, the engine handles it)
-      (void)next_str(va);                 // dir / category (unused)
-      const char *fn = next_str(va);
+      // getFile(String filename, String foldername, String tag) -> byte[]
+      // Read `filename` from the game dir as a byte[]; NULL on miss.
+      const char *fn = next_str(va);      // filename (e.g. ".GTA3LCSsf1.b")
+      (void)next_str(va);                 // foldername (unused in this port)
+      (void)next_str(va);                 // tag / Rockstar ID (unused)
+      if (g_hide_saves) {
+        debugPrintf("JNI: andFile.getFile(%s) -> hidden (New Game)\n", fn);
+        return NULL;
+      }
       long len = 0;
       char *data = read_whole_file(fn, &len);
+      debugPrintf("JNI: andFile.getFile(%s) -> %s\n", fn, data ? "ok" : "null");
       if (!data)
         return NULL;
       FakePriArray *a = calloc(1, sizeof(*a));
@@ -642,10 +608,35 @@ static void *hal_object(const FakeID *id, va_list va) {
       a->data = data; // hand ownership to the array
       return a;
     }
+    if (!strcmp(name, "putFile")) {
+      // putFile(String filename, String foldername, String tag, byte[] data) -> Object
+      // Write the save byte[] to `filename` in the game dir.
+      // Returns a non-NULL object on success so the engine doesn't poll forever.
+      const char *fn   = next_str(va);   // filename (e.g. ".GTA3LCSsf1.b")
+      (void)next_str(va);                // foldername (unused)
+      (void)next_str(va);                // tag / Rockstar ID (unused)
+      FakePriArray *arr = va_arg(va, void *); // byte[] payload
+      if (!fn || !arr || arr->tag != TAG_PRIARR || arr->len <= 0) {
+        debugPrintf("JNI: andFile.putFile(%s) -> bad args, skipping\n", fn ? fn : "(null)");
+        return jni_make_object("putFile_err");
+      }
+      FILE *f = fopen(fn, "wb");
+      if (!f) {
+        debugPrintf("JNI: andFile.putFile(%s) -> fopen FAILED\n", fn);
+        return jni_make_object("putFile_err");
+      }
+      const size_t written = fwrite(arr->data, 1, (size_t)arr->len, f);
+      fclose(f);
+      const int ok = ((int)written == arr->len);
+      debugPrintf("JNI: andFile.putFile(%s) -> %s (%d/%d bytes)\n",
+                  fn, ok ? "ok" : "SHORT WRITE", (int)written, arr->len);
+      // Return a non-NULL object: the engine checks for NULL to detect failure.
+      return jni_make_object(ok ? "putFile_ok" : "putFile_err");
+    }
   }
 
   // toImage / addSubview returns / NewObject-style getters -> a fresh fake obj
-  debugPrintf("JNI: CallObjectMethod %s.%s [sig=%s] -> fake object\n", id->cls, name, id->sig);
+  debugPrintf("JNI: CallObjectMethod %s.%s -> fake object\n", id->cls, name);
   return jni_make_object("halobject");
 }
 
@@ -766,7 +757,7 @@ static float j_CallFloatMethod(void *env, void *obj, FakeID *id, ...) {
 
 static juint j_CallLongMethodV(void *env, void *obj, FakeID *id, va_list va) {
   (void)env; (void)obj; (void)va;
-  debugPrintf("JNI: CallLongMethod %s.%s [sig=%s] -> 0\n", id->cls, id->name, id->sig);
+  debugPrintf("JNI: CallLongMethod %s.%s -> 0\n", id->cls, id->name);
   return 0;
 }
 
