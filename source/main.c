@@ -223,7 +223,6 @@ static void  (* implOnBackButtonPressed)(void *env, void *thiz);
 static void  (* implRsGameLoaded)(void *env, void *thiz);
 static void  (* implRsStartGame)(void *env, void *thiz);
 static void  (* implRsStartGameBeforeLoad)(void *env, void *thiz);
-static void  (* implRsStartGameBeforeSave)(void *env, void *thiz);
 static void  (* implRsFinishGate)(void *env, void *thiz);
 static void  (* implRsHandleStateChanged)(void *env, void *thiz, int signed_in);
 static int   (* implCommonHandlePlaylistFinishInit)(void *env, void *thiz, int success);
@@ -277,7 +276,6 @@ static void resolve_entry_points(void) {
   ENT(implRsGameLoaded, RJ "GameLoaded");
   ENT(implRsStartGame, RJ "StartGame");
   ENT(implRsStartGameBeforeLoad, RJ "StartGameBeforeLoad");
-  ENT(implRsStartGameBeforeSave, RJ "StartGameBeforeSave");
   ENT(implRsFinishGate, RJ "FinishGate");
   ENT(implRsHandleStateChanged, RJ "HandleStateChanged");
   ENT(implCommonHandlePlaylistFinishInit, "Java_com_rockstargames_gtalcs_CommonAPI_HandlePlaylistFinishInit");
@@ -314,11 +312,7 @@ static void dispatch_callbacks(void) {
         debugPrintf("cb: RockstarJNIlib.StartGameBeforeLoad\n");
         implRsStartGameBeforeLoad(fake_env, NULL);
         break;
-      case JNI_CB_RS_START_BEFORE_SAVE:
-        debugPrintf("cb: RockstarJNIlib.StartGameBeforeSave\n");
-        if (implRsStartGameBeforeSave)
-          implRsStartGameBeforeSave(fake_env, NULL);
-        break;
+
       case JNI_CB_RS_START_GAME:
         debugPrintf("cb: RockstarJNIlib.StartGame\n");
         // New Game: hide save files (g_hide_saves) for the duration so the engine
