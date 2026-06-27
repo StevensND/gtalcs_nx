@@ -160,7 +160,7 @@ typedef struct {
   int button;
 } PadMap;
 
-// Positional face buttons (Switch B = bottom = engine A confirm).
+// Face buttons map 1:1: Switch A/B/X/Y = engine GPAD_BUTTON_A/B/X/Y.
 // Minus is handled via onBackButtonPressed below, not as a button index.
 static const PadMap pad_map[] = {
   { HidNpadButton_B, GPAD_BUTTON_B },
@@ -450,6 +450,22 @@ static void update_gamepad(void) {
         debugPrintf("INPUT: JoyButtonDown pad=0 btn=%d\n", pad_map[i].button);
         implOnJoyButtonDown(fake_env, NULL, 0, pad_map[i].button);
         movie_skip(); // the game ignores input while waiting for a movie
+
+        // The save-slot overwrite confirmation dialog ("A Seleccionar") is an
+        // engine-internal touch-only overlay: it ignores gamepad entirely and
+        // waits for a tap on the on-screen "A" button (bottom-right corner).
+        // When the user presses Switch A (= GPAD_BUTTON_A = engine confirm),
+        // synthesise a touch-down + touch-up at those coordinates so the dialog
+        // accepts the confirm without requiring a physical screen tap.
+        if (pad_map[i].button == GPAD_BUTTON_A) {
+          // "A Seleccionar" button sits at roughly 88 % x, 93 % y (1280x720).
+          const float tap_x = 0.88f;
+          const float tap_y = 0.93f;
+          static int synth_slot = 7; // slot index unlikely to clash with real touches
+          debugPrintf("INPUT: SynthTouch confirm tap (%.2f, %.2f)\n", tap_x, tap_y);
+          implOnTouchStart(fake_env, NULL, synth_slot, tap_x, tap_y);
+          implOnTouchEnd  (fake_env, NULL, synth_slot, tap_x, tap_y);
+        }
       } else {
         debugPrintf("INPUT: JoyButtonUp pad=0 btn=%d\n", pad_map[i].button);
         implOnJoyButtonUp(fake_env, NULL, 0, pad_map[i].button);
