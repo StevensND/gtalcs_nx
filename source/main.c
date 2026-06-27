@@ -163,10 +163,10 @@ typedef struct {
 // Positional face buttons (Switch B = bottom = engine A confirm).
 // Minus is handled via onBackButtonPressed below, not as a button index.
 static const PadMap pad_map[] = {
-  { HidNpadButton_B, GPAD_BUTTON_A },
-  { HidNpadButton_A, GPAD_BUTTON_B },
-  { HidNpadButton_Y, GPAD_BUTTON_X },
-  { HidNpadButton_X, GPAD_BUTTON_Y },
+  { HidNpadButton_B, GPAD_BUTTON_B },
+  { HidNpadButton_A, GPAD_BUTTON_A },
+  { HidNpadButton_Y, GPAD_BUTTON_Y },
+  { HidNpadButton_X, GPAD_BUTTON_X },
   { HidNpadButton_L, GPAD_BUTTON_L1 },
   { HidNpadButton_R, GPAD_BUTTON_R1 },
   { HidNpadButton_ZL, GPAD_BUTTON_L2 },
@@ -291,7 +291,6 @@ static void resolve_entry_points(void) {
   (void)implIsInitialized;
   (void)implIsOnMainMenuScreen;
   (void)implGetGameBuildType;
-  (void)implUpdateRockstarID;
   (void)implInitTouchSense;
 }
 
@@ -337,6 +336,12 @@ static void dispatch_callbacks(void) {
       case JNI_CB_RS_STATE_CHANGED:
         debugPrintf("cb: RockstarJNIlib.HandleStateChanged(%d)\n", cb.arg0);
         implRsHandleStateChanged(fake_env, NULL, cb.arg0);
+        break;
+      case JNI_CB_UPDATE_ROCKSTAR_ID:
+        // Reply to RockstarJNIlib.UpdateRockstarID() with an empty string ID.
+        // Without this the save/load menu loops forever re-scanning save slots.
+        debugPrintf("cb: GTAJNIlib.updateRockstarID(\"\")\n");
+        implUpdateRockstarID(fake_env, NULL, jni_make_string(""));
         break;
       case JNI_CB_VIDEO_FINISHED:
         debugPrintf("cb: andVideo.VideoFinishedCB\n");

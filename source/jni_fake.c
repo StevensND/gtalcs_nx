@@ -418,7 +418,15 @@ static void hal_void(const FakeID *id, va_list va) {
       push_cb(JNI_CB_RS_STATE_CHANGED, 0); // offline / signed-out
       return;
     }
-    // ShowPrompt / SetLocalePriority / UpdateRockstarID -> no-op
+    if (!strcmp(name, "UpdateRockstarID")) {
+      // Engine calls this to request the current Rockstar ID before showing the
+      // save/load menu. Without the reply callback it loops forever re-scanning
+      // save slots. Reply immediately with an empty ID (offline, no account).
+      debugPrintf("JNI: RockstarJNIlib.UpdateRockstarID -> updateRockstarID(\"\")\n");
+      push_cb(JNI_CB_UPDATE_ROCKSTAR_ID, 0);
+      return;
+    }
+    // ShowPrompt / SetLocalePriority -> no-op
     debugPrintf("JNI: RockstarJNIlib.%s [sig=%s] ignored\n", name, id->sig);
     return;
   }
