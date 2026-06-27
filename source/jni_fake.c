@@ -411,7 +411,20 @@ static void hal_void(const FakeID *id, va_list va) {
       push_cb(JNI_CB_RS_STATE_CHANGED, 0); // offline / signed-out
       return;
     }
-    // ShowPrompt / SetLocalePriority / UpdateRockstarID -> no-op
+    if (!strcmp(name, "UpdateRockstarID")) {
+      // The engine calls UpdateRockstarID() to ask the Social Club SDK for the
+      // cloud Rockstar ID of the save slot it just enumerated. The SDK would
+      // call back GTAJNIlib.updateRockstarID("") when the ID is ready (empty
+      // string = offline / no cloud ID). Without this callback the engine
+      // stalls in an infinite poll loop reading save slots and never proceeds
+      // to render the save menu or commit the overwrite. Fire it immediately.
+      extern void (*implUpdateRockstarID)(void *env, void *thiz, void *id);
+      if (implUpdateRockstarID)
+        implUpdateRockstarID(fake_env, NULL, jni_make_string(""));
+      debugPrintf("JNI: RockstarJNIlib.UpdateRockstarID -> updateRockstarID(\"\")\n");
+      return;
+    }
+    // ShowPrompt / SetLocalePriority -> no-op
     debugPrintf("JNI: RockstarJNIlib.%s ignored\n", name);
     return;
   }
@@ -587,14 +600,12 @@ static void *hal_object(const FakeID *id, va_list va) {
       return r;
     }
     if (!strcmp(name, "getFile")) {
-      // getFile(String filename, String foldername, String tag) -> byte[]
-      // Read `filename` from the game dir as a byte[]; NULL on miss.
-      const char *fn = next_str(va);      // filename (e.g. ".GTA3LCSsf1.b")
-      (void)next_str(va);                 // foldername (unused in this port)
-      (void)next_str(va);                 // tag / Rockstar ID (unused)
+      // (dir, name, ext)[B -- best effort: read `name` from the game dir as a
+      // byte[]; NULL on miss (first boot has no saves, the engine handles it)
+      (void)next_str(va);                 // dir / category (unused)
+      const char *fn = next_str(va);
       long len = 0;
       char *data = read_whole_file(fn, &len);
-      debugPrintf("JNI: andFile.getFile(%s) -> %s\n", fn, data ? "ok" : "null");
       if (!data)
         return NULL;
       FakePriArray *a = calloc(1, sizeof(*a));
@@ -603,31 +614,6 @@ static void *hal_object(const FakeID *id, va_list va) {
       a->elem_size = 1;
       a->data = data; // hand ownership to the array
       return a;
-    }
-    if (!strcmp(name, "putFile")) {
-      // putFile(String filename, String foldername, String tag, byte[] data) -> Object
-      // Write the save byte[] to `filename` in the game dir.
-      // Returns a non-NULL object on success so the engine doesn't poll forever.
-      const char *fn   = next_str(va);   // filename (e.g. ".GTA3LCSsf1.b")
-      (void)next_str(va);                // foldername (unused)
-      (void)next_str(va);                // tag / Rockstar ID (unused)
-      FakePriArray *arr = va_arg(va, void *); // byte[] payload
-      if (!fn || !arr || arr->tag != TAG_PRIARR || arr->len <= 0) {
-        debugPrintf("JNI: andFile.putFile(%s) -> bad args, skipping\n", fn ? fn : "(null)");
-        return jni_make_object("putFile_err");
-      }
-      FILE *f = fopen(fn, "wb");
-      if (!f) {
-        debugPrintf("JNI: andFile.putFile(%s) -> fopen FAILED\n", fn);
-        return jni_make_object("putFile_err");
-      }
-      const size_t written = fwrite(arr->data, 1, (size_t)arr->len, f);
-      fclose(f);
-      const int ok = ((int)written == arr->len);
-      debugPrintf("JNI: andFile.putFile(%s) -> %s (%d/%d bytes)\n",
-                  fn, ok ? "ok" : "SHORT WRITE", (int)written, arr->len);
-      // Return a non-NULL object: the engine checks for NULL to detect failure.
-      return jni_make_object(ok ? "putFile_ok" : "putFile_err");
     }
   }
 

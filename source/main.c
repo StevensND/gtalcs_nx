@@ -199,7 +199,7 @@ static void  (* implMarkInitialized)(void *env, void *thiz);
 static int   (* implIsInitialized)(void *env, void *thiz);
 static int   (* implIsOnMainMenuScreen)(void *env, void *thiz);
 static void *(* implGetGameBuildType)(void *env, void *thiz);
-static void  (* implUpdateRockstarID)(void *env, void *thiz, void *id);
+void  (* implUpdateRockstarID)(void *env, void *thiz, void *id);
 
 // surface / frame
 static void  (* implViewOnSurfaceCreated)(void *env, void *thiz);
@@ -291,7 +291,7 @@ static void resolve_entry_points(void) {
   (void)implIsInitialized;
   (void)implIsOnMainMenuScreen;
   (void)implGetGameBuildType;
-  (void)implUpdateRockstarID;
+  // implUpdateRockstarID is called from jni_fake.c (UpdateRockstarID callback)
   (void)implInitTouchSense;
 }
 
