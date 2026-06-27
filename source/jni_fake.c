@@ -419,7 +419,7 @@ static void hal_void(const FakeID *id, va_list va) {
       return;
     }
     // ShowPrompt / SetLocalePriority / UpdateRockstarID -> no-op
-    debugPrintf("JNI: RockstarJNIlib.%s ignored\n", name);
+    debugPrintf("JNI: RockstarJNIlib.%s [sig=%s] ignored\n", name, id->sig);
     return;
   }
 
@@ -489,7 +489,7 @@ static void hal_void(const FakeID *id, va_list va) {
                   fn, data_len, (f || data_len == 0) ? "ok" : "FAIL");
       return;
     }
-    debugPrintf("JNI: andFile.%s (void) ignored\n", name);
+    debugPrintf("JNI: andFile.%s [sig=%s] (void) ignored\n", name, id->sig);
     return;
   }
 
@@ -530,7 +530,7 @@ static void hal_void(const FakeID *id, va_list va) {
 
   // --- com.rockstargames.hal.andAudio (UI sfx) -- stub for now ---
   // --- everything else (andView/andViewManager/andLabel/andButton/...) ---
-  debugPrintf("JNI: CallVoidMethod %s.%s ignored\n", id->cls, name);
+  debugPrintf("JNI: CallVoidMethod %s.%s [sig=%s] ignored\n", id->cls, name, id->sig);
 }
 
 static juint hal_int(const FakeID *id, va_list va) {
@@ -547,7 +547,7 @@ static juint hal_int(const FakeID *id, va_list va) {
     if (!strcmp(name, "PlayAudioFile"))
       return 0; // handle 0 == "not playing"
   }
-  debugPrintf("JNI: CallIntMethod %s.%s -> 0\n", id->cls, name);
+  debugPrintf("JNI: CallIntMethod %s.%s [sig=%s] -> 0\n", id->cls, name, id->sig);
   return 0;
 }
 
@@ -577,7 +577,7 @@ static juint hal_bool(const FakeID *id, va_list va) {
     if (!strcmp(name, "CheckGate"))
       return 1;
   }
-  debugPrintf("JNI: CallBooleanMethod %s.%s -> false\n", id->cls, name);
+  debugPrintf("JNI: CallBooleanMethod %s.%s [sig=%s] -> false\n", id->cls, name, id->sig);
   return 0;
 }
 
@@ -587,7 +587,7 @@ static float hal_float(const FakeID *id, va_list va) {
     const char *v = kv_get(key);
     return v ? (float)atof(v) : 0.0f;
   }
-  debugPrintf("JNI: CallFloatMethod %s.%s -> 0\n", id->cls, id->name);
+  debugPrintf("JNI: CallFloatMethod %s.%s [sig=%s] -> 0\n", id->cls, id->name, id->sig);
   return 0.0f;
 }
 
@@ -637,7 +637,7 @@ static void *hal_object(const FakeID *id, va_list va) {
   }
 
   // toImage / addSubview returns / NewObject-style getters -> a fresh fake obj
-  debugPrintf("JNI: CallObjectMethod %s.%s -> fake object\n", id->cls, name);
+  debugPrintf("JNI: CallObjectMethod %s.%s [sig=%s] -> fake object\n", id->cls, name, id->sig);
   return jni_make_object("halobject");
 }
 
@@ -758,7 +758,7 @@ static float j_CallFloatMethod(void *env, void *obj, FakeID *id, ...) {
 
 static juint j_CallLongMethodV(void *env, void *obj, FakeID *id, va_list va) {
   (void)env; (void)obj; (void)va;
-  debugPrintf("JNI: CallLongMethod %s.%s -> 0\n", id->cls, id->name);
+  debugPrintf("JNI: CallLongMethod %s.%s [sig=%s] -> 0\n", id->cls, id->name, id->sig);
   return 0;
 }
 
