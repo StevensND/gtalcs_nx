@@ -450,11 +450,36 @@ static void hal_void(const FakeID *id, va_list va) {
   // --- com.rockstargames.hal.andFile (write a small user file natively) ---
   if (cls_is(id, "andFile")) {
     if (!strcmp(name, "writeUserFile")) {
-      const char *fn = next_str(va);
-      const char *data = next_str(va);
-      FILE *f = fopen(fn, "wb");
-      if (f) { fwrite(data, 1, strlen(data), f); fclose(f); }
-      debugPrintf("JNI: andFile.writeUserFile(%s) -> %s\n", fn, f ? "ok" : "FAIL");
+      // The engine calls writeUserFile(String filename, byte[] data) where the
+      // second argument is a FakePriArray holding binary savegame bytes.
+      // The previous code used next_str() on the second arg, which extracts the
+      // ->utf pointer from a FakeString -- but save data is a byte[], not a
+      // String. strlen() on a FakePriArray pointer is undefined behaviour and
+      // truncates (or corrupts) the write at the first 0x00 byte.
+      // On overwrite (slot already exists) the engine re-reads the file right
+      // after writing; reading a truncated/garbage save caused the freeze/crash.
+      const char *fn = next_str(va);          // arg0: filename (String -- ok)
+      FakePriArray *arr = va_arg(va, void *); // arg1: byte[] (FakePriArray)
+      const char *data = NULL;
+      int data_len = 0;
+      if (arr && arr->tag == TAG_PRIARR) {
+        data     = (const char *)arr->data;
+        data_len = arr->len;
+      } else if (arr) {
+        // Defensive fallback: some callers may pass a String-wrapped buffer
+        FakeString *s = (FakeString *)arr;
+        if (s->tag == TAG_STRING && s->utf) {
+          data     = s->utf;
+          data_len = (int)strlen(s->utf);
+        }
+      }
+      FILE *f = NULL;
+      if (data && data_len > 0) {
+        f = fopen(fn, "wb");
+        if (f) { fwrite(data, 1, (size_t)data_len, f); fclose(f); }
+      }
+      debugPrintf("JNI: andFile.writeUserFile(%s, %d bytes) -> %s\n",
+                  fn, data_len, (f || data_len == 0) ? "ok" : "FAIL");
       return;
     }
     debugPrintf("JNI: andFile.%s (void) ignored\n", name);
