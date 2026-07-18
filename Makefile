@@ -62,7 +62,8 @@ CXXFLAGS	:= $(CFLAGS)
 ASFLAGS	:=	-g $(ARCH)
 LDFLAGS	=	-specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map) \
 			-Wl,--wrap=nouveau_mm_allocate -Wl,--wrap=nouveau_mm_free \
-			-Wl,--wrap=nouveau_mm_free_work
+			-Wl,--wrap=nouveau_mm_free_work \
+			-Wl,--build-id=sha1
 
 # mpg123 is needed since 2.1.131 (music streaming used to be in libVendor_mpg123.so)
 # install it with: pacman -S switch-mpg123
@@ -75,7 +76,9 @@ LIBS	:= -lopenal -lSDL2 -lmpg123 \
 # list of directories containing libraries, this must be the top level containing
 # include and lib
 #---------------------------------------------------------------------------------
-LIBDIRS	:= $(PORTLIBS) $(LIBNX)
+# When scripts/build-mesa.sh has staged the shader-cache Mesa, link it from the
+# project-local dir first; falls back to the stock switch-mesa portlib if absent.
+LIBDIRS	:= $(wildcard $(CURDIR)/mesa-install/opt/devkitpro/portlibs/switch) $(PORTLIBS) $(LIBNX)
 
 
 #---------------------------------------------------------------------------------

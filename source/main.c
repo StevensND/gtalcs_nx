@@ -520,6 +520,14 @@ int main(void) {
   setenv("mesa_glthread", "false", 1);
   setenv("GALLIUM_THREAD", "0", 1);
 
+  // Persist Mesa's compiled-shader disk cache across launches (avoids recompiling
+  // every boot; ported from gtasa_nx). Must be set before the game creates its GL
+  // context. Mesa 20.1 uses the MESA_GLSL_CACHE_* names; needs -Wl,--build-id in
+  // LDFLAGS or Mesa can't key the cache and silently disables it.
+  mkdir("/switch/gtalcs/shadercache", 0777);
+  setenv("MESA_GLSL_CACHE_DIR", "/switch/gtalcs/shadercache", 1);
+  setenv("MESA_GLSL_CACHE_DISABLE", "false", 1);
+
   // load config (defaults if absent), then write it back so newly-added keys
   // like xbox_layout always show up in config.txt for editing
   read_config(CONFIG_NAME);

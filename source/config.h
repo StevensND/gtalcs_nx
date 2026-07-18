@@ -12,8 +12,10 @@
 // MB reserved for the .so load region (only holds the mapped libGame.so/
 // libopenal.so, ~15MB). The newlib heap gets (total RAM - this) and backs all
 // dynamic allocation: the game's malloc and mesa's GPU bos. Sizing it larger
-// starved the GPU and OOM'd world-load textures (glerr=0x505).
-#define MEMORY_SO_MB 256
+// starves the GPU and OOMs world-load textures (glerr=0x505), so keep it
+// small -- mirrors the same fix already applied in gtasa_nx (MEMORY_SO_MB 64),
+// with 4x headroom over the observed ~15MB actually used by the mapped libs.
+#define MEMORY_SO_MB 64
 
 // The APK ships no libc++_shared.so; the C++ runtime resolves from its own
 // libopenal.so, which statically links libc++ with default visibility. We load

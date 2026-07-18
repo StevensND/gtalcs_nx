@@ -120,6 +120,48 @@ static EGLBoolean eglMakeCurrent_log(EGLDisplay dpy, EGLSurface draw,
   return eglMakeCurrent(dpy, draw, read, ctx);
 }
 
+// Per-thread cache of the last successful eglMakeCurrent, ported from gtasa_nx:
+// the engine re-binds the same context+surface many times per frame from the
+// game/render thread and mesa revalidates each time, so skip the redundant bind
+// (a no-op per the EGL spec). Keyed per-thread via TPIDR_EL0, NOT a single global
+// slot -- safe alongside LCS's real per-worker-thread GL contexts (each worker's
+// bind is tracked independently and never clobbers another thread's entry). This
+// only covers calls the game itself makes through this hooked import; the worker
+// contexts set up by ensure_worker_gl_context() call the real eglMakeCurrent
+// directly and are unaffected.
+#define MC_SLOTS 8
+static struct {
+  void *key;
+  EGLDisplay dpy; EGLSurface draw, read; EGLContext ctx;
+} g_mc[MC_SLOTS];
+
+static inline void *mc_thread_key(void) {
+  void *p;
+  __asm__ volatile("mrs %0, tpidr_el0" : "=r"(p));
+  return p;
+}
+
+static EGLBoolean eglMakeCurrent_dedup(EGLDisplay dpy, EGLSurface draw,
+                                       EGLSurface read, EGLContext ctx) {
+  void *key = mc_thread_key();
+  int slot = -1, freeslot = -1;
+  for (int i = 0; i < MC_SLOTS; i++) {
+    if (g_mc[i].key == key) { slot = i; break; }
+    if (!g_mc[i].key && freeslot < 0) freeslot = i;
+  }
+  if (slot >= 0 && g_mc[slot].dpy == dpy && g_mc[slot].draw == draw &&
+      g_mc[slot].read == read && g_mc[slot].ctx == ctx)
+    return EGL_TRUE; // already current on this thread -> skip the redundant bind
+
+  EGLBoolean r = eglMakeCurrent_log(dpy, draw, read, ctx);
+  if (r) {
+    if (slot < 0) slot = (freeslot >= 0) ? freeslot : 0;
+    g_mc[slot].key = key; g_mc[slot].dpy = dpy;
+    g_mc[slot].draw = draw; g_mc[slot].read = read; g_mc[slot].ctx = ctx;
+  }
+  return r;
+}
+
 // mesa nouveau_mm slab-allocator replacement (-Wl,--wrap): mesa's small-buffer
 // sub-allocator corrupts its slab pool under the world load's thousands of
 // glBufferData allocations. Replace it with a bump-slab pool of large bos,
@@ -673,7 +715,7 @@ DynLibFunction dynlib_functions[] = {
   { "eglCreateWindowSurface", (uintptr_t)&eglCreateWindowSurface },
   { "eglDestroySurface", (uintptr_t)&eglDestroySurface },
   { "eglDestroyContext", (uintptr_t)&eglDestroyContext },
-  { "eglMakeCurrent", (uintptr_t)&eglMakeCurrent_log },
+  { "eglMakeCurrent", (uintptr_t)&eglMakeCurrent_dedup },
   // hooked so the movie player can overlay video frames before each swap
   { "eglSwapBuffers", (uintptr_t)&eglSwapBuffersHook },
   { "eglSwapInterval", (uintptr_t)&eglSwapInterval },

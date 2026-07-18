@@ -50,6 +50,30 @@ You're going to need devkitA64 and the following packages/libraries:
 * `switch-openal-soft`
 * `devkitpro-pkgbuild-helpers`
 
+Install those first with `dkp-pacman`, then:
+
+**Build the patched Mesa** (required — the stock `switch-mesa` ships with the
+on-disk shader cache disabled on Horizon, so shaders are recompiled every
+launch, causing stutter). This rebuilds `switch-mesa` from the devkitPro Mesa
+fork with `patches/mesa-switch-shadercache.patch` and stages it in a
+project-local `mesa-install/` dir that `make` links automatically — your
+system `switch-mesa` is left untouched:
+
+```sh
+bash scripts/build-mesa.sh
+```
+
+The script installs its own Mesa build dependencies — `meson`, `ninja`,
+`bison`, `flex`, `python3-mako` (via `apt`) and `dkp-meson-scripts`,
+`dkp-toolchain-vars`, `switch-pkg-config` (via `dkp-pacman`). Re-run it only
+when the patch or the pinned Mesa commit changes.
+
+Then build the `.nro` as usual:
+
+```sh
+make
+```
+
 ### Credits
 
 * TheOfficialFloW for the method and the original PS Vita work;
